@@ -1,3 +1,4 @@
+
 // PDF.js Configuration
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
 
@@ -145,28 +146,111 @@ function handleFile(file) {
 }
 
 
+document.addEventListener("DOMContentLoaded", function () {
+    console.log("DOM fully loaded");
+
+    // Function to display extracted content
+    function displayResults(data) {
+        const resultsDiv = document.getElementById("results");
+        if (!resultsDiv) {
+            console.error("No element with ID 'results' found in the HTML");
+            return;
+        }
+        
+        // Clear previous content
+        resultsDiv.innerHTML = "";
+        
+        // Add extracted text
+        if (data.text) {
+            resultsDiv.innerHTML += `<h3>Extracted Text</h3><p>${data.text.replace(/\n/g, '<br>')}</p>`;
+        }
+        
+        // Add extracted formulas using MathJax
+        if (data.formulas && data.formulas.length > 0) {
+            resultsDiv.innerHTML += "<h3>Mathematical Formulas</h3>";
+            data.formulas.forEach(formula => {
+                resultsDiv.innerHTML += `<p>\(${formula}\)</p>`; // MathJax inline rendering
+            });
+        }
+        
+        // Add extracted tables
+        if (data.tables && data.tables.length > 0) {
+            resultsDiv.innerHTML += "<h3>Extracted Tables</h3>";
+            data.tables.forEach(table => {
+                let tableHTML = "<table class='table table-bordered'><thead><tr>";
+                table[0].forEach(header => {
+                    tableHTML += `<th>${header}</th>`;
+                });
+                tableHTML += "</tr></thead><tbody>";
+                
+                table.slice(1).forEach(row => {
+                    tableHTML += "<tr>";
+                    row.forEach(cell => {
+                        tableHTML += `<td>${cell}</td>`;
+                    });
+                    tableHTML += "</tr>";
+                });
+                
+                tableHTML += "</tbody></table>";
+                resultsDiv.innerHTML += tableHTML;
+            });
+        }
+        
+        // Add extracted images with descriptive labels
+        // Add extracted images with descriptive labels and details
+        if (data.images && data.images.length > 0) {
+            resultsDiv.innerHTML += "<h3>Extracted Images</h3>";
+            data.images.forEach((img, index) => {
+                let description = img.text ? img.text : "Description not available";
+                let width = img.width ? img.width + 'px' : "Unknown";
+                let height = img.height ? img.height + 'px' : "Unknown";
+        
+                resultsDiv.innerHTML += `
+                    <div class='image-container'>
+                        <p><strong>Image ${index + 1} (Page ${img.page})</strong></p>
+                        <p><em>AI-Generated Description:</em> ${description}</p>
+                        <p><strong>Dimensions:</strong> ${width} x ${height}</p>
+                    </div>
+                `;
+            });
+        }
+        
+        // Trigger MathJax to render formulas
+        if (window.MathJax) {
+            MathJax.typeset();
+        }
+    }
+    
+    // ✅ Ensure `displayResults()` is globally accessible
+    window.displayResults = displayResults;
+});
+
+
 function sendFileToServer(file) {
     return new Promise((resolve, reject) => {
         const formData = new FormData();
         formData.append('pdfFile', file);
         
-        fetch('http://127.0.0.1:8000/parse-pdf', {  // Replace with your actual endpoint
+        fetch('http://localhost:8000/parse-pdf', {  // Changed to match backend port
             method: 'POST',
-            body: formData,
-            // headers: { 'Content-Type': 'multipart/form-data' } // Don't set this manually
+            body: formData
         })
-        .then(response => {
+        .then(async response => {
             if (!response.ok) {
-                throw new Error('Server responded with an error');
+                const err = await response.json();
+                throw new Error(err.error);
             }
             return response.json();
         })
         .then(data => {
             console.log('Upload successful:', data);
+            // Process the extracted content
+            displayResults(data);
             resolve(data);
         })
         .catch(error => {
             console.error('Upload error:', error);
+            showError(error.message);
             reject(error);
         });
     });

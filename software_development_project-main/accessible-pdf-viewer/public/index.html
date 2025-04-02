@@ -6,6 +6,8 @@
     <title>Accessible PDF Viewer</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
     
     <!-- PDF.js Configuration -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
@@ -13,6 +15,9 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 
             'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
     </script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
 </head>
 <body>
     <div id="app">
@@ -52,6 +57,7 @@
         <span aria-hidden="true">🔊</span>
         <span class="sr-only">Toggle Text-to-Speech</span>
     </button>
+    <div id="results"></div>,
 
     <script src="assets/js/main.js"></script>
 </body>

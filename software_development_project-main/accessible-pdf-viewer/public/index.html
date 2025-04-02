@@ -17,52 +17,12 @@
     </script>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    
-    <style>
-        /* TTS Active State */
-        #tts-toggle.active {
-            background-color: #4CAF50;
-            color: white;
-        }
-
-        /* Explanation Content Styling */
-        .explanation-content {
-            background-color: #f8f9fa;
-            padding: 15px;
-            margin-top: 20px;
-            border-left: 4px solid #4CAF50;
-            border-radius: 4px;
-        }
-
-        /* Accessibility Focus Styles */
-        .accessible-table:focus,
-        .image-container:focus {
-            outline: 2px solid #4CAF50;
-        }
-
-        /* Voice Selector Styling */
-        #voice-select {
-            margin-left: 10px;
-            padding: 5px;
-            border-radius: 4px;
-        }
-
-        /* Language Selector Styling */
-        #language-select {
-            margin-left: 10px;
-            padding: 5px;
-            border-radius: 4px;
-        }
-
-        /* Highlight for active explanations */
-        .explanation-highlight {
-            background-color: #fffde7;
-            transition: background-color 0.3s ease;
-        }
-    </style>
 </head>
 <body>
     <div id="app">
+        <!-- Skip Navigation Link
+        <a href="#main-content" class="skip-link">Skip to main content</a> -->
+        
         <header role="banner">
             <h1>Accessible PDF Viewer</h1>
             <p class="sr-only">A fully accessible PDF viewer with text extraction, content explanations, and screen reader support</p>
@@ -115,7 +75,7 @@
                 </button>
                 <select id="voice-select" aria-label="Select voice">
                     <option value="">Loading voices...</option>
-                </select>
+                  </select>
                 <select id="language-select" aria-label="Select language">
                     <option value="en">English</option>
                     <option value="es">Español</option>
@@ -126,10 +86,25 @@
                     <i class="fas fa-info-circle"></i> Explain
                 </button>
             </div>
+            <div class="btn-group preferences-group" role="group" aria-label="Content preferences">
+                <label for="explanation-depth" class="sr-only">Explanation depth</label>
+                <select id="explanation-depth" aria-label="Explanation depth">
+                    <option value="simple">Simple Explanations</option>
+                    <option value="detailed" selected>Detailed Explanations</option>
+                </select>
+                <label for="auto-read" class="preference-label">
+                    <input type="checkbox" id="auto-read" aria-label="Auto-read content">
+                    Auto-read
+                </label>
+                <label for="highlight-content" class="preference-label">
+                    <input type="checkbox" id="highlight-content" aria-label="Highlight content" checked>
+                    Highlight
+                </label>
+            </div>
         </nav>
 
         <!-- Main Content Area -->
-        <main>
+        <main id="main-content">
             <!-- PDF Container -->
             <div id="pdf-container" role="document" aria-label="PDF document viewer" tabindex="0"></div>
             
@@ -143,7 +118,7 @@
             <section id="explanations" aria-labelledby="explanations-heading" class="mt-4">
                 <h2 id="explanations-heading">Content Explanations</h2>
                 <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Click the "Explain" button above to generate accessible explanations of the document content.
+                    <i class="fas fa-info-circle"></i> Press Ctrl+E to quickly explain content
                 </div>
                 <div id="explanations-content"></div>
             </section>
@@ -159,8 +134,9 @@
                     <li>Text-to-speech with multi-language support</li>
                     <li>Interactive content explanations</li>
                     <li>Accessible tables and images</li>
+                    <li>User preferences for explanation depth and reading</li>
                 </ul>
-                <p>Press Ctrl+E to quickly explain content</p>
+                <p><strong>Keyboard Shortcuts:</strong> Arrows (navigation), +/- (zoom), 0 (reset zoom), Ctrl+T (TTS), Ctrl+E (Explain)</p>
             </div>
         </footer>
     </div>

@@ -21,90 +21,100 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
 CORS(app)
 
 # Initialize models
+from transformers import pipeline  # Add to imports
+
+# Initialize multilingual processors (add near model initialization)
 try:
-    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    translator = pipeline("translation", model="Helsinki-NLP/opus-mt-mul-en")
+    text_processor = pipeline("text2text-generation", model="facebook/m2m100_418M")
 except Exception as e:
-    logger.error(f"Model initialization failed: {str(e)}")
+    logger.error(f"Multilingual processor initialization failed: {str(e)}")
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-def extract_pdf_text(filepath: str) -> str:
-    """Extract text with accessibility tags"""
+def extract_pdf_text(filepath: str, target_lang: str = "en") -> str:
+    """Extract and translate text content"""
     try:
-        text_content = ""
+        raw_text = ""
         with fitz.open(filepath) as doc:
             for page in doc:
-                text_page = page.get_text("dict", flags=fitz.TEXT_PRESERVE_IMAGES)
-                for block in text_page.get("blocks", []):
-                    if block["type"] == 0:  # Text block
-                        for line in block["lines"]:
-                            for span in line["spans"]:
-                                text_content += f'<span role="text" aria-label="{span["text"]}">{span["text"]}</span>'
-                            text_content += "\n"
-                    elif block["type"] == 1:  # Image block
-                        text_content += f'[Image: {block.get("alt", "No description")}]'
-        return text_content
+                raw_text += page.get_text("text")
+        
+        if target_lang != "en":
+            # Split into chunks to avoid token limits
+            chunks = [raw_text[i:i+500] for i in range(0, len(raw_text), 500)]
+            translated_chunks = []
+            for chunk in chunks:
+                translated = text_processor(chunk, forced_bos_token_id=text_processor.lang_code_to_id[target_lang])
+                translated_chunks.append(translated[0]['generated_text'])
+            return " ".join(translated_chunks)
+        
+        return raw_text
     except Exception as e:
-        raise Exception(f"Text extraction failed: {str(e)}")
+        raise Exception(f"Text extraction/translation failed: {str(e)}")
 
-def extract_pdf_tables(filepath: str) -> list:
-    """Extract tables with accessibility metadata"""
+def extract_pdf_tables(filepath: str, target_lang: str = "en") -> list:
+    """Extract and translate table content"""
     try:
         tables = []
         with pdfplumber.open(filepath) as pdf:
             for page_num, page in enumerate(pdf.pages):
-                for table_num, table in enumerate(page.extract_tables()):
-                    table_data = {
+                for table in page.extract_tables():
+                    translated_table = {
                         "page": page_num + 1,
-                        "table_num": table_num + 1,
-                        "rows": table,
-                        "summary": f"Table {table_num + 1} with {len(table)} rows",
-                        "role": "table"
+                        "rows": [],
+                        "summary": ""
                     }
-                    tables.append(table_data)
+                    
+                    # Translate headers if they exist
+                    if len(table) > 0 and any(cell.strip() for cell in table[0]):
+                        headers = table[0]
+                        if target_lang != "en":
+                            headers = [translator(header, target_lang=target_lang)[0]['translation_text'] 
+                                      for header in headers]
+                        translated_table["headers"] = headers
+                    
+                    # Translate table content
+                    for row in table[1 if 'headers' in translated_table else 0:]:
+                        if target_lang != "en":
+                            row = [translator(cell, target_lang=target_lang)[0]['translation_text'] 
+                                  if cell.strip() else cell 
+                                  for cell in row]
+                        translated_table["rows"].append(row)
+                    
+                    # Generate summary
+                    summary = f"Table with {len(translated_table['rows'])} rows"
+                    if target_lang != "en":
+                        summary = translator(summary, target_lang=target_lang)[0]['translation_text']
+                    translated_table["summary"] = summary
+                    
+                    tables.append(translated_table)
         return tables
     except Exception as e:
         raise Exception(f"Table extraction failed: {str(e)}")
 
-def generate_image_caption(image_bytes: bytes) -> dict:
-    """Generate image descriptions"""
+def generate_image_caption(image_bytes: bytes, target_lang: str = "en") -> dict:
+    """Generate multilingual image descriptions"""
     try:
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        inputs = processor(image, return_tensors="pt")
-        with torch.no_grad():
-            caption_ids = model.generate(**inputs)
+        caption = image_captioner(image)[0]['generated_text']
+        
+        if target_lang != "en":
+            caption = translator(caption, target_lang=target_lang)[0]['translation_text']
+            
         return {
-            "basic_description": processor.decode(caption_ids[0], skip_special_tokens=True),
+            "basic_description": caption,
             "width": image.width,
-            "height": image.height
+            "height": image.height,
+            "aria-label": f"Image described as: {caption}" if target_lang == "en" else 
+                         translator(f"Image described as: {caption}", target_lang=target_lang)[0]['translation_text']
         }
     except Exception as e:
-        raise Exception(f"Image captioning failed: {str(e)}")
-
-def extract_pdf_images(filepath: str) -> list:
-    """Extract images with accessibility data"""
-    images_data = []
-    try:
-        doc = fitz.open(filepath)
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            for img_index, img in enumerate(page.get_images(full=True)):
-                xref = img[0]
-                base_image = doc.extract_image(xref)
-                descriptions = generate_image_caption(base_image["image"])
-                images_data.append({
-                    "page": page_num + 1,
-                    "image_index": img_index + 1,
-                    "alt_text": descriptions["basic_description"],
-                    "width": descriptions["width"],
-                    "height": descriptions["height"],
-                    "role": "graphic",
-                    "aria-label": f"Image {img_index + 1} on page {page_num + 1}"
-                })
-        return images_data
-    except Exception as e:
-        raise Exception(f"Image extraction failed: {str(e)}")
+        logger.error(f"Multilingual captioning failed: {str(e)}")
+        return {
+            "basic_description": "Image" if target_lang == "en" else 
+                               translator("Image", target_lang=target_lang)[0]['translation_text'],
+            "width": 0,
+            "height": 0
+        }
 
 @app.route('/parse-pdf', methods=['POST'])
 def parse_pdf():
@@ -112,23 +122,22 @@ def parse_pdf():
         return jsonify({'error': 'No file uploaded'}), 400
     
     file = request.files['pdfFile']
-    if file.filename == '':
-        return jsonify({'error': 'Empty filename'}), 400
+    target_lang = request.form.get('language', 'en')  # Get language from request
     
-    filepath = None
     try:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
         return jsonify({
-            'text': extract_pdf_text(filepath),
-            'tables': extract_pdf_tables(filepath),
-            'images': extract_pdf_images(filepath),
+            'text': extract_pdf_text(filepath, target_lang),
+            'tables': extract_pdf_tables(filepath, target_lang),
+            'images': extract_pdf_images(filepath, target_lang),
             'status': 'success',
+            'language': target_lang,
             'accessibility': {
                 'compliance': 'WCAG 2.1 AA',
-                'features': ['alt-text', 'semantic-structure']
+                'features': ['alt-text', 'semantic-structure', 'multilingual']
             }
         })
     except Exception as e:

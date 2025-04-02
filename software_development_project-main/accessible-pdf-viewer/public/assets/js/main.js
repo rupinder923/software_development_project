@@ -11,7 +11,14 @@ const pdfState = {
     pageNumPending: null,
     scale: 1.0,
     scaleStep: 0.25,
-    language: 'en' // Default language
+    maxScale: 3.0,
+    minScale: 0.5,
+    language: 'en', // Default language
+    preferences: {
+        explanationDepth: 'detailed', // 'simple' or 'detailed'
+        autoRead: false,
+        highlightContent: true
+    }
 };
 
 // TTS and Accessibility State
@@ -23,10 +30,42 @@ const tts = {
     rate: 1,
     voice: null,
     supportedLanguages: {
-        'en': 'English',
-        'es': 'Spanish',
-        'fr': 'French',
-        'de': 'German'
+        'en': { 
+            name: 'English', 
+            translations: {
+                'Document Text': 'Document Text',
+                'Tables': 'Tables',
+                'Images': 'Images',
+                'Page': 'Page',
+                'Dimensions': 'Dimensions',
+                'Upload a PDF to begin': 'Upload a PDF to begin',
+                'Processing PDF...': 'Processing PDF...'
+            }
+        },
+        'es': { 
+            name: 'Spanish',
+            translations: {
+                'Document Text': 'Texto del Documento',
+                'Tables': 'Tablas',
+                'Images': 'Imágenes',
+                'Page': 'Página',
+                'Dimensions': 'Dimensiones',
+                'Upload a PDF to begin': 'Suba un PDF para comenzar',
+                'Processing PDF...': 'Procesando PDF...'
+            }
+        },
+        'fr': {
+            name: 'French',
+            translations: {
+                'Document Text': 'Texte du Document',
+                'Tables': 'Tableaux',
+                'Images': 'Images',
+                'Page': 'Page',
+                'Dimensions': 'Dimensions',
+                'Upload a PDF to begin': 'Téléchargez un PDF pour commencer',
+                'Processing PDF...': 'Traitement du PDF...'
+            }
+        }
     }
 };
 
@@ -46,51 +85,64 @@ const ttsButton = document.getElementById('tts-toggle');
 const voiceSelector = document.getElementById('voice-select');
 const languageSelector = document.getElementById('language-select');
 const explainContentBtn = document.getElementById('explain-content');
+const explanationDepthSelect = document.getElementById('explanation-depth');
+const autoReadCheckbox = document.getElementById('auto-read');
+const highlightCheckbox = document.getElementById('highlight-content');
 
+// Translation Helper
+function translate(key) {
+    const langData = tts.supportedLanguages[pdfState.language];
+    return langData?.translations?.[key] || key;
+}
 
+// Display Results with Multilingual Support
 function displayResults(data) {
     resultsDiv.innerHTML = '';
     
     // Text Content
     if (data.text) {
         const textSection = document.createElement('section');
-        textSection.setAttribute('aria-label', 'Extracted text');
+        textSection.setAttribute('aria-label', translate('Document Text'));
         
         const heading = document.createElement('h2');
-        heading.textContent = 'Document Text';
+        heading.textContent = translate('Document Text');
         textSection.appendChild(heading);
         
         const textContent = document.createElement('div');
         textContent.className = 'text-content';
         textContent.innerHTML = data.text.replace(/\n/g, '<br>');
-        textSection.appendChild(textContent);
         
+        if (pdfState.preferences.highlightContent) {
+            textContent.classList.add('highlighted');
+        }
+        
+        textSection.appendChild(textContent);
         resultsDiv.appendChild(textSection);
     }
 
     // Tables with Enhanced Accessibility
     if (data.tables?.length) {
         const tableSection = document.createElement('section');
-        tableSection.setAttribute('aria-label', 'Extracted tables');
+        tableSection.setAttribute('aria-label', translate('Tables'));
         
         const heading = document.createElement('h2');
-        heading.textContent = 'Tables';
+        heading.textContent = translate('Tables');
         tableSection.appendChild(heading);
         
         data.tables.forEach(table => {
             const tableContainer = document.createElement('div');
             tableContainer.className = 'table-container';
             tableContainer.setAttribute('role', 'region');
-            tableContainer.setAttribute('aria-label', table.summary || 'Data table');
+            tableContainer.setAttribute('aria-label', table.summary || translate('Data table'));
             
             const tableEl = document.createElement('table');
             tableEl.className = 'accessible-table';
-            tableEl.setAttribute('aria-describedby', 'table-desc');
+            tableEl.setAttribute('aria-describedby', `table-desc-${table.table_num || Date.now()}`);
             
             // Add caption for screen readers
             const caption = document.createElement('caption');
-            caption.id = 'table-desc';
-            caption.textContent = table.summary || 'Data table with ' + table.rows.length + ' rows';
+            caption.id = `table-desc-${table.table_num || Date.now()}`;
+            caption.textContent = table.summary || `${translate('Data table')} with ${table.rows.length} ${translate('rows')}`;
             tableEl.appendChild(caption);
             
             // Headers if available
@@ -113,9 +165,12 @@ function displayResults(data) {
             const tbody = document.createElement('tbody');
             table.rows.forEach(row => {
                 const tr = document.createElement('tr');
-                row.forEach(cell => {
+                row.forEach((cell, index) => {
                     const td = document.createElement('td');
                     td.textContent = cell;
+                    if (table.headers?.[index]) {
+                        td.setAttribute('data-header', table.headers[index]);
+                    }
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
@@ -132,24 +187,24 @@ function displayResults(data) {
     // Images with Enhanced Accessibility
     if (data.images?.length) {
         const imageSection = document.createElement('section');
-        imageSection.setAttribute('aria-label', 'Extracted images');
+        imageSection.setAttribute('aria-label', translate('Images'));
         
         const heading = document.createElement('h2');
-        heading.textContent = 'Images';
+        heading.textContent = translate('Images');
         imageSection.appendChild(heading);
         
         data.images.forEach(img => {
             const imgContainer = document.createElement('div');
             imgContainer.className = 'image-container';
             imgContainer.setAttribute('role', 'img');
-            imgContainer.setAttribute('aria-label', img['aria-label'] || 'Document image');
+            imgContainer.setAttribute('aria-label', img['aria-label'] || translate('Document image'));
             
             const pageInfo = document.createElement('p');
-            pageInfo.innerHTML = `<strong>Page ${img.page}:</strong> ${img.alt_text}`;
+            pageInfo.innerHTML = `<strong>${translate('Page')} ${img.page}:</strong> ${img.alt_text}`;
             imgContainer.appendChild(pageInfo);
             
             const dimensions = document.createElement('p');
-            dimensions.textContent = `Dimensions: ${img.width} × ${img.height}px`;
+            dimensions.textContent = `${translate('Dimensions')}: ${img.width} × ${img.height}px`;
             imgContainer.appendChild(dimensions);
             
             imageSection.appendChild(imgContainer);
@@ -163,19 +218,24 @@ function displayResults(data) {
         const notice = document.createElement('div');
         notice.className = 'accessibility-notice';
         notice.setAttribute('role', 'status');
-        notice.textContent = `This document includes accessibility features: ${data.accessibility.features.join(', ')}`;
+        notice.textContent = `${translate('This document includes accessibility features')}: ${data.accessibility.features.join(', ')}`;
         resultsDiv.appendChild(notice);
+    }
+
+    // Auto-read if enabled
+    if (pdfState.preferences.autoRead && tts.enabled) {
+        readCurrentPage();
     }
 }
 
 // Helper Functions
 function showStatus(message) {
-    statusDiv.textContent = message;
+    statusDiv.textContent = translate(message);
     statusDiv.style.display = 'block';
 }
 
 function showError(message) {
-    statusDiv.innerHTML = `<span class="error">${message}</span>`;
+    statusDiv.innerHTML = `<span class="error">${translate(message)}</span>`;
     statusDiv.style.display = 'block';
 }
 
@@ -186,7 +246,7 @@ function disableControls(disabled) {
 }
 
 function updatePageCount() {
-    if (pdfState.pdfDoc) {
+    if (pageNum && pdfState.pdfDoc) {
         pageNum.textContent = `Page ${pdfState.pageNum} of ${pdfState.pdfDoc.numPages}`;
     }
 }
@@ -213,9 +273,6 @@ function handleDrop(e) {
         showError("Please upload a valid PDF file");
     }
 }
-
-
-
 
 function setupDragAndDrop() {
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -255,12 +312,18 @@ function handleFile(file) {
 function sendFileToServer(file) {
     const formData = new FormData();
     formData.append('pdfFile', file);
+    formData.append('language', pdfState.language);
     
     return fetch('http://localhost:8000/parse-pdf', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.status === 'success') {
             displayResults(data);
@@ -308,6 +371,11 @@ function renderPage(num) {
         }).promise.then(() => {
             pdfState.pageRendering = false;
             updatePageCount();
+            
+            // Auto-read if enabled
+            if (pdfState.preferences.autoRead && tts.enabled) {
+                readCurrentPage();
+            }
         });
     });
 }
@@ -328,13 +396,15 @@ function onNextPage() {
 }
 
 function onZoomIn() {
-    pdfState.scale += pdfState.scaleStep;
-    renderPage(pdfState.pageNum);
+    if (pdfState.scale < pdfState.maxScale) {
+        pdfState.scale = Math.min(pdfState.scale + pdfState.scaleStep, pdfState.maxScale);
+        renderPage(pdfState.pageNum);
+    }
 }
 
 function onZoomOut() {
-    if (pdfState.scale > pdfState.scaleStep) {
-        pdfState.scale -= pdfState.scaleStep;
+    if (pdfState.scale > pdfState.minScale) {
+        pdfState.scale = Math.max(pdfState.scale - pdfState.scaleStep, pdfState.minScale);
         renderPage(pdfState.pageNum);
     }
 }
@@ -365,23 +435,28 @@ async function loadVoices() {
 }
 
 function updateVoiceSelector() {
-    if (!voiceSelector) return;
+    const voiceSelect = document.getElementById('voice-select');
     
-    voiceSelector.innerHTML = '';
+    if (!voiceSelect) {
+        console.error('Error: Could not find voice-select element');
+        return;
+    }
+
+    voiceSelect.innerHTML = '';
+
     const currentLanguage = pdfState.language;
-    
     const langVoices = tts.voices.filter(v => v.lang.startsWith(currentLanguage));
     const voicesToShow = langVoices.length > 0 ? langVoices : tts.voices;
-    
+
     voicesToShow.forEach(voice => {
         const option = document.createElement('option');
         option.value = voice.voiceURI;
         option.textContent = `${voice.name} (${voice.lang})`;
-        voiceSelector.appendChild(option);
+        voiceSelect.appendChild(option);
     });
 
     if (tts.voice) {
-        voiceSelector.value = tts.voice.voiceURI;
+        voiceSelect.value = tts.voice.voiceURI;
     }
 }
 
@@ -464,49 +539,65 @@ function stopTTS() {
         speechSynthesis.cancel();
     }
     tts.speaking = false;
+    ttsButton.classList.remove('active');
 }
 
 // Language Handling
 function setupLanguageSelector() {
     if (!languageSelector) return;
     
-    for (const [code, name] of Object.entries(tts.supportedLanguages)) {
+    for (const [code, langData] of Object.entries(tts.supportedLanguages)) {
         const option = document.createElement('option');
         option.value = code;
-        option.textContent = name;
+        option.textContent = langData.name;
         languageSelector.appendChild(option);
     }
     
     languageSelector.addEventListener('change', (e) => {
         pdfState.language = e.target.value;
         updateVoiceSelector();
+        
+        // Update UI elements with translations
+        container.querySelector('.upload-prompt').textContent = translate('Upload a PDF to begin');
+        updatePageCount();
     });
 }
 
 // Content Explanation
 function explainTable(table) {
     let explanation = '';
-    explanation += `This table has ${table.headers?.length || 0} columns and ${table.rows.length} rows. `;
     
-    if (table.headers?.length) {
-        explanation += `The columns are: ${table.headers.join(', ')}. `;
-    }
-    
-    explanation += "Here's the data: ";
-    table.rows.forEach((row, i) => {
-        explanation += `Row ${i + 1}: `;
-        row.forEach((cell, j) => {
-            const header = table.headers?.[j] || `Column ${j + 1}`;
-            explanation += `${header} is ${cell}. `;
+    if (pdfState.preferences.explanationDepth === 'simple') {
+        explanation += `This table has ${table.headers?.length || 0} columns and ${table.rows.length} rows. `;
+        if (table.headers?.length) {
+            explanation += `The columns are: ${table.headers.join(', ')}. `;
+        }
+    } else {
+        explanation += `Detailed table analysis: This table contains ${table.rows.length} rows of data. `;
+        if (table.headers?.length) {
+            explanation += `Column headers are: ${table.headers.join(', ')}. `;
+        }
+        explanation += "Here's the complete data: ";
+        table.rows.forEach((row, i) => {
+            explanation += `Row ${i + 1}: `;
+            row.forEach((cell, j) => {
+                const header = table.headers?.[j] || `Column ${j + 1}`;
+                explanation += `${header} contains "${cell}". `;
+            });
         });
-    });
+    }
     
     return explanation;
 }
 
 function explainImage(image) {
-    return `On page ${image.page}, there is an image described as: ${image.alt_text}. ` +
-           `The image is ${image.width} pixels wide and ${image.height} pixels tall.`;
+    if (pdfState.preferences.explanationDepth === 'simple') {
+        return `Image on page ${image.page} described as: ${image.alt_text}.`;
+    } else {
+        return `Detailed image description: On page ${image.page}, there is an image described as: "${image.alt_text}". ` +
+               `The image dimensions are ${image.width} pixels wide by ${image.height} pixels tall. ` +
+               `This visual content appears to show: ${image.alt_text}.`;
+    }
 }
 
 function explainContent() {
@@ -516,19 +607,19 @@ function explainContent() {
     }
 
     const currentLanguage = pdfState.language;
-    let explanation = `Document explanations in ${tts.supportedLanguages[currentLanguage]}: `;
+    let explanation = `Document explanations in ${tts.supportedLanguages[currentLanguage].name}: `;
     
     const sections = resultsDiv.querySelectorAll('section');
     sections.forEach(section => {
         const sectionType = section.getAttribute('aria-label');
         
         switch(sectionType) {
-            case 'Extracted text':
+            case translate('Document Text'):
                 explanation += "The document contains the following text: " + 
                               section.querySelector('.text-content').textContent + ". ";
                 break;
                 
-            case 'Extracted tables':
+            case translate('Tables'):
                 section.querySelectorAll('.table-container').forEach(tableContainer => {
                     const table = {
                         headers: Array.from(tableContainer.querySelectorAll('th')).map(th => th.textContent),
@@ -540,13 +631,13 @@ function explainContent() {
                 });
                 break;
                 
-            case 'Extracted images':
+            case translate('Images'):
                 section.querySelectorAll('.image-container').forEach(imgContainer => {
                     const img = {
-                        page: imgContainer.querySelector('strong').textContent.replace('Page ', '').replace(':', ''),
+                        page: imgContainer.querySelector('strong').textContent.replace(translate('Page'), '').replace(':', '').trim(),
                         alt_text: imgContainer.querySelector('p').textContent.split(':')[1].trim(),
-                        width: imgContainer.querySelectorAll('p')[1].textContent.split('×')[0].trim().replace('Dimensions: ', ''),
-                        height: imgContainer.querySelectorAll('p')[1].textContent.split('×')[1].trim().replace('px', '')
+                        width: imgContainer.querySelectorAll('p')[1].textContent.split('×')[0].replace(translate('Dimensions'), '').trim(),
+                        height: imgContainer.querySelectorAll('p')[1].textContent.split('×')[1].replace('px', '').trim()
                     };
                     explanation += explainImage(img);
                 });
@@ -555,10 +646,45 @@ function explainContent() {
     });
     
     speakText(explanation);
+    
     const explanationDiv = document.createElement('div');
     explanationDiv.className = 'explanation-content';
-    explanationDiv.textContent = explanation;
+    explanationDiv.innerHTML = `
+        <h3>${translate('Document Explanation')}</h3>
+        <p>${explanation.replace(/\. /g, '.<br>')}</p>
+    `;
     resultsDiv.appendChild(explanationDiv);
+}
+
+// Preferences Management
+function setupPreferences() {
+    if (explanationDepthSelect) {
+        explanationDepthSelect.value = pdfState.preferences.explanationDepth;
+        explanationDepthSelect.addEventListener('change', (e) => {
+            pdfState.preferences.explanationDepth = e.target.value;
+        });
+    }
+
+    if (autoReadCheckbox) {
+        autoReadCheckbox.checked = pdfState.preferences.autoRead;
+        autoReadCheckbox.addEventListener('change', (e) => {
+            pdfState.preferences.autoRead = e.target.checked;
+            if (e.target.checked && !tts.enabled) {
+                toggleTTS();
+            }
+        });
+    }
+
+    if (highlightCheckbox) {
+        highlightCheckbox.checked = pdfState.preferences.highlightContent;
+        highlightCheckbox.addEventListener('change', (e) => {
+            pdfState.preferences.highlightContent = e.target.checked;
+            const textContent = document.querySelector('.text-content');
+            if (textContent) {
+                textContent.classList.toggle('highlighted', e.target.checked);
+            }
+        });
+    }
 }
 
 // Setup Functions
@@ -599,6 +725,26 @@ function setupEventListeners() {
         explainContentBtn.addEventListener('click', explainContent);
     }
     
+    // Keyboard navigation
+    const focusableElements = [prevBtn, nextBtn, zoomInBtn, zoomOutBtn, zoomResetBtn, ttsButton, explainContentBtn];
+    focusableElements.forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
+            }
+        });
+        el.setAttribute('tabindex', '0');
+    });
+
+    // Skip navigation link
+    const skipLink = document.createElement('a');
+    skipLink.href = '#content-results';
+    skipLink.textContent = 'Skip to content';
+    skipLink.className = 'skip-link';
+    document.body.prepend(skipLink);
+
+    // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (!pdfState.pdfDoc) return;
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
@@ -622,7 +768,9 @@ async function init() {
     setupDragAndDrop();
     setupFileInput();
     setupEventListeners();
-    container.innerHTML = '<p class="upload-prompt">Upload a PDF to begin</p>';
+    setupPreferences();
+    console.log('Voice select element:', document.getElementById('voice-select'));
+    container.innerHTML = `<p class="upload-prompt">${translate('Upload a PDF to begin')}</p>`;
     disableControls(true);
 }
 

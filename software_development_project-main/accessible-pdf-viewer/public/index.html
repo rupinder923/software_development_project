@@ -7,58 +7,168 @@
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- PDF.js Configuration -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     </script>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
+    <style>
+        /* TTS Active State */
+        #tts-toggle.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* Explanation Content Styling */
+        .explanation-content {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin-top: 20px;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+        }
+
+        /* Accessibility Focus Styles */
+        .accessible-table:focus,
+        .image-container:focus {
+            outline: 2px solid #4CAF50;
+        }
+
+        /* Voice Selector Styling */
+        #voice-select {
+            margin-left: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        /* Language Selector Styling */
+        #language-select {
+            margin-left: 10px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        /* Highlight for active explanations */
+        .explanation-highlight {
+            background-color: #fffde7;
+            transition: background-color 0.3s ease;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
-        <h1>Accessible PDF Viewer</h1>
+        <header role="banner">
+            <h1>Accessible PDF Viewer</h1>
+            <p class="sr-only">A fully accessible PDF viewer with text extraction, content explanations, and screen reader support</p>
+        </header>
         
         <!-- File Upload Area -->
-        <div id="upload-area">
-            <div id="drop-zone">
-                <p>Drag & Drop PDF here</p>
+        <section id="upload-area" aria-labelledby="upload-heading">
+            <h2 id="upload-heading" class="sr-only">PDF Upload</h2>
+            <div id="drop-zone" role="region" aria-labelledby="drop-instructions">
+                <p id="drop-instructions">Drag & Drop PDF here</p>
                 <p>or</p>
                 <input type="file" id="pdf-upload" accept=".pdf" aria-label="Upload PDF file">
-                <label for="pdf-upload">Choose PDF</label>
+                <label for="pdf-upload" class="btn btn-primary">
+                    <i class="fas fa-file-pdf"></i> Choose PDF
+                </label>
             </div>
-            <div id="load-status">
-                <div id="progress-bar"></div>
+            <div id="load-status" role="status" aria-live="polite">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar" role="progressbar"></div>
+                </div>
                 <p id="status-message"></p>
             </div>
-        </div>
+        </section>
 
         <!-- Viewer Controls -->
-        <div class="toolbar" role="toolbar" aria-label="PDF controls">
-            <button id="prev" aria-label="Previous page">Previous</button>
-            <button id="next" aria-label="Next page">Next</button>
-            <span id="page-num">Page: 1</span>
-            <button id="zoom-in" aria-label="Zoom in">+</button>
-            <button id="zoom-out" aria-label="Zoom out">-</button>
-            <button id="zoom-reset" aria-label="Reset zoom">Reset</button>
-        </div>
+        <nav class="toolbar" role="toolbar" aria-label="PDF navigation controls">
+            <div class="btn-group" role="group">
+                <button id="prev" class="btn btn-secondary" aria-label="Previous page">
+                    <i class="fas fa-arrow-left"></i> Prev
+                </button>
+                <span id="page-num" class="btn btn-light" aria-live="polite">Page: 1</span>
+                <button id="next" class="btn btn-secondary" aria-label="Next page">
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            <div class="btn-group" role="group" aria-label="Zoom controls">
+                <button id="zoom-in" class="btn btn-secondary" aria-label="Zoom in">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button id="zoom-out" class="btn btn-secondary" aria-label="Zoom out">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <button id="zoom-reset" class="btn btn-secondary" aria-label="Reset zoom">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            <div class="btn-group" role="group" aria-label="Accessibility controls">
+                <button id="tts-toggle" class="btn btn-secondary" aria-label="Toggle text-to-speech" aria-pressed="false">
+                    <i class="fas fa-volume-up"></i> TTS
+                </button>
+                <select id="voice-select" aria-label="Select voice">
+                    <option value="">Loading voices...</option>
+                </select>
+                <select id="language-select" aria-label="Select language">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                </select>
+                <button id="explain-content" class="btn btn-info" aria-label="Explain content">
+                    <i class="fas fa-info-circle"></i> Explain
+                </button>
+            </div>
+        </nav>
 
-        <!-- PDF Container -->
-        <div id="pdf-container" role="document" aria-label="PDF document viewer" tabindex="0"></div>
+        <!-- Main Content Area -->
+        <main>
+            <!-- PDF Container -->
+            <div id="pdf-container" role="document" aria-label="PDF document viewer" tabindex="0"></div>
+            
+            <!-- Extracted Content -->
+            <section id="results" aria-labelledby="results-heading">
+                <h2 id="results-heading">Extracted Content</h2>
+                <div id="content-results"></div>
+            </section>
+
+            <!-- Content Explanations -->
+            <section id="explanations" aria-labelledby="explanations-heading" class="mt-4">
+                <h2 id="explanations-heading">Content Explanations</h2>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Click the "Explain" button above to generate accessible explanations of the document content.
+                </div>
+                <div id="explanations-content"></div>
+            </section>
+        </main>
+
+        <!-- Accessibility Notice -->
+        <footer role="contentinfo" class="mt-4">
+            <div class="alert alert-light">
+                <h2>Accessibility Features</h2>
+                <ul>
+                    <li>Screen reader compatible (JAWS, NVDA, VoiceOver)</li>
+                    <li>Keyboard navigation support</li>
+                    <li>Text-to-speech with multi-language support</li>
+                    <li>Interactive content explanations</li>
+                    <li>Accessible tables and images</li>
+                </ul>
+                <p>Press Ctrl+E to quickly explain content</p>
+            </div>
+        </footer>
     </div>
 
     <!-- Accessibility Elements -->
     <div id="aria-live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
-    <button id="tts-toggle" aria-label="Toggle text-to-speech">
-        <span aria-hidden="true">🔊</span>
-        <span class="sr-only">Toggle Text-to-Speech</span>
-    </button>
-    <div id="results"></div>,
 
-    <script src="assets/js/main.js"></script>
+    <!-- Scripts -->
+    <script src="assets/js/main.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Basic Meta Tags -->
+    <meta charset="UTF-8"> <!-- Character encoding -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- Responsive viewport -->
+    <title>Accessible PDF Viewer</title> <!-- Page title -->
+    
+    <!-- CSS Stylesheets -->
+    <link rel="stylesheet" href="assets/css/styles.css"> <!-- Custom styles -->
+    <link rel="icon" href="favicon.ico" type="image/x-icon"> <!-- Favicon -->
+    <!-- External CSS Libraries -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"> <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> <!-- Font Awesome -->
+    
+    <!-- PDF.js Configuration -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script> <!-- PDF.js library -->
+    <script>
+      // Configure PDF.js worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    </script>
+    
+    <!-- MathJax for mathematical formulas -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+    <!-- Main Application Container -->
+    <div id="app">
+        <!-- Header Section -->
+        <header role="banner"> <!-- ARIA landmark role -->
+            <h1>Accessible PDF Viewer</h1>
+            <p class="sr-only">A fully accessible PDF viewer with text extraction, content explanations, and screen reader support</p>
+            <!-- Hidden description for screen readers -->
+        </header>
+        
+        <!-- File Upload Section -->
+        <section id="upload-area" aria-labelledby="upload-heading">
+            <h2 id="upload-heading" class="sr-only">PDF Upload</h2> <!-- Hidden heading for screen readers -->
+            
+            <!-- Drag and Drop Zone -->
+            <div id="drop-zone" role="region" aria-labelledby="drop-instructions">
+                <p id="drop-instructions">Drag & Drop PDF here</p>
+                <p>or</p>
+                <!-- File Input (hidden, triggered by label) -->
+                <input type="file" id="pdf-upload" accept=".pdf" aria-label="Upload PDF file">
+                <label for="pdf-upload" class="btn btn-primary">
+                    <i class="fas fa-file-pdf"></i> Choose PDF
+                </label>
+            </div>
+            
+            <!-- Upload Status Indicator -->
+            <div id="load-status" role="status" aria-live="polite">
+                <div class="progress">
+                    <div id="progress-bar" class="progress-bar" role="progressbar"></div>
+                </div>
+                <p id="status-message"></p> <!-- Dynamic status messages -->
+            </div>
+        </section>
+
+        <!-- Viewer Controls Toolbar -->
+        <nav class="toolbar" role="toolbar" aria-label="PDF navigation controls">
+            <!-- Page Navigation Controls -->
+            <div class="btn-group" role="group">
+                <button id="prev" class="btn btn-secondary" aria-label="Previous page">
+                    <i class="fas fa-arrow-left"></i> Prev
+                </button>
+                <span id="page-num" class="btn btn-light" aria-live="polite">Page: 1</span> <!-- Current page display -->
+                <button id="next" class="btn btn-secondary" aria-label="Next page">
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+            
+            <!-- Zoom Controls -->
+            <div class="btn-group" role="group" aria-label="Zoom controls">
+                <button id="zoom-in" class="btn btn-secondary" aria-label="Zoom in">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button id="zoom-out" class="btn btn-secondary" aria-label="Zoom out">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <button id="zoom-reset" class="btn btn-secondary" aria-label="Reset zoom">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+            
+            <!-- Accessibility Controls -->
+            <div class="btn-group" role="group" aria-label="Accessibility controls">
+                <!-- Text-to-Speech Toggle -->
+                <button id="tts-toggle" class="btn btn-secondary" aria-label="Toggle text-to-speech" aria-pressed="false">
+                    <i class="fas fa-volume-up"></i> TTS
+                </button>
+                
+                <!-- Voice Selection Dropdown -->
+                <select id="voice-select" aria-label="Select voice">
+                    <option value="">Loading voices...</option>
+                </select>
+                
+                <!-- Language Selection -->
+                <select id="language-select" aria-label="Select language">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                </select>
+                
+                <!-- Content Explanation Button -->
+                <button id="explain-content" class="btn btn-info" aria-label="Explain content">
+                    <i class="fas fa-info-circle"></i> Explain
+                </button>
+            </div>
+            
+            <!-- User Preferences -->
+            <div class="btn-group preferences-group" role="group" aria-label="Content preferences">
+                <!-- Explanation Depth Setting -->
+                <label for="explanation-depth" class="sr-only">Explanation depth</label>
+                <select id="explanation-depth" aria-label="Explanation depth">
+                    <option value="simple">Simple Explanations</option>
+                    <option value="detailed" selected>Detailed Explanations</option>
+                </select>
+                
+                <!-- Auto-read Toggle -->
+                <label for="auto-read" class="preference-label">
+                    <input type="checkbox" id="auto-read" aria-label="Auto-read content">
+                    Auto-read
+                </label>
+                
+                <!-- Content Highlight Toggle -->
+                <label for="highlight-content" class="preference-label">
+                    <input type="checkbox" id="highlight-content" aria-label="Highlight content" checked>
+                    Highlight
+                </label>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main id="main-content"> <!-- Main content landmark -->
+            <!-- PDF Viewer Container -->
+            <div id="pdf-container" role="document" aria-label="PDF document viewer" tabindex="0"></div>
+            
+            <!-- Extracted Content Section -->
+            <section id="results" aria-labelledby="results-heading">
+                <h2 id="results-heading">Extracted Content</h2>
+                <div id="content-results"></div> <!-- Dynamic content will be inserted here -->
+            </section>
+
+            <!-- Content Explanations Section -->
+            <section id="explanations" aria-labelledby="explanations-heading" class="mt-4">
+                <h2 id="explanations-heading">Content Explanations</h2>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Press Ctrl+E to quickly explain content
+                </div>
+                <div id="explanations-content"></div> <!-- Explanations will be inserted here -->
+            </section>
+        </main>
+
+        <!-- Footer with Accessibility Information -->
+        <footer role="contentinfo" class="mt-4"> <!-- Footer landmark -->
+            <div class="alert alert-light">
+                <h2>Accessibility Features</h2>
+                <ul>
+                    <li>Screen reader compatible (JAWS, NVDA, VoiceOver)</li>
+                    <li>Keyboard navigation support</li>
+                    <li>Text-to-speech with multi-language support</li>
+                    <li>Interactive content explanations</li>
+                    <li>Accessible tables and images</li>
+                    <li>User preferences for explanation depth and reading</li>
+                </ul>
+                <p><strong>Keyboard Shortcuts:</strong> Arrows (navigation), +/- (zoom), 0 (reset zoom), Ctrl+T (TTS), Ctrl+E (Explain)</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Hidden ARIA Live Region for Screen Readers -->
+    <div id="aria-live-region" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+    <!-- JavaScript -->
+    <script src="assets/js/main.js" defer></script> <!-- Main application logic (loaded deferred) -->
+</body>
+</html>
